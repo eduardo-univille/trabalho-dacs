@@ -1,4 +1,0 @@
-FROM nginx:alpine
-
-COPY src /usr/share/nginx/html/
-COPY web/default.conf /etc/nginx/conf.d/
