@@ -40,7 +40,7 @@ objects:
       type: ClusterIP
       sessionAffinity: None
     status:
-      loadBalancer:
+      loadBalancer: {}
   - kind: DeploymentConfig
     apiVersion: v1
     metadata:
@@ -59,7 +59,6 @@ objects:
               kind: ImageStreamTag
               name: postgresql:9.5
               namespace: openshift
-            lastTriggeredImage: ''
         - type: ConfigChange
       replicas: 1
       selector:
@@ -104,9 +103,8 @@ objects:
                   mountPath: /var/lib/pgsql/data
               terminationMessagePath: /dev/termination-log
               imagePullPolicy: IfNotPresent
-              capabilities:
               securityContext:
-                capabilities:
+                capabilities: {}
                 privileged: false
           volumes:
             - name: ${SERVICE_NAME}-data
