@@ -23,13 +23,135 @@ objects:
     stringData:
       database-user: ${POSTGRESQL_USER}
       database-password: ${POSTGRESQL_PASSWORD}
+  - kind: Route
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}
+    spec:
+      host: ${APPLICATION_DOMAIN}
+      to:
+        kind: Service
+        name: ${SERVICE_NAME}-web
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-web
+      creationTimestamp: null
+      annotations:
+        service.alpha.openshift.io/dependencies: '[{"name": "${SERVICE_NAME}-php", "namespace": "", "kind": "Service"}, {"name": "${SERVICE_NAME}-pg", "namespace": "", "kind": "Service"}]'
+    spec:
+      ports:
+        - name: web
+          protocol: TCP
+          port: 8080
+          targetPort: 8080
+          nodePort: 0
+      selector:
+        name: ${SERVICE_NAME}-web
+        deploymentconfig: ${SERVICE_NAME}-web
+      type: ClusterIP
+      sessionAffinity: None
+    status:
+      loadBalancer: {}
+  - kind: ImageStream
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-web
+  - kind: BuildConfig
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-web
+      creationTimestamp: null
+    spec:
+      nodeSelector: null
+      runPolicy: Serial
+      source:
+        type: Git
+        git:
+          uri: ${GIT_URL}
+          ref: ${GIT_REF}
+      strategy:
+        type: Docker
+        dockerStrategy:
+          dockerfilePath: Dockerfile-web
+          from:
+            kind: DockerImage
+            name: nginx:alpine
+      output:
+        to:
+          kind: ImageStreamTag
+          name: ${SERVICE_NAME}-web:latest
+      triggers:
+        - type: ImageChange
+        - type: ConfigChange
+        - type: Generic
+          generic:
+            secret: ${WEBHOOK_SECRET}
+        - type: GitHub
+          github:
+            secret: ${WEBHOOK_SECRET}
+      postCommit: {}
+  - kind: DeploymentConfig
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-web
+      creationTimestamp: null
+    spec:
+      strategy:
+        type: Rolling
+      triggers:
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - ${SERVICE_NAME}-web
+            from:
+              kind: ImageStreamTag
+              name: ${SERVICE_NAME}-web:latest
+        - type: ConfigChange
+      replicas: 1
+      selector:
+        name: ${SERVICE_NAME}-web
+        deploymentconfig: ${SERVICE_NAME}-web
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            name: ${SERVICE_NAME}-web
+            deploymentconfig: ${SERVICE_NAME}-web
+        spec:
+          containers:
+            - name: ${SERVICE_NAME}-web
+              image: ' '
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+              readinessProbe:
+                timeoutSeconds: 1
+                initialDelaySeconds: 5
+                tcpSocket:
+                  port: 8080
+              livenessProbe:
+                timeoutSeconds: 1
+                initialDelaySeconds: 5
+                tcpSocket:
+                  port: 8080
+              env:
+                - name: SERVICE_NAME
+                  value: ${SERVICE_NAME}
+              terminationMessagePath: /dev/termination-log
+              imagePullPolicy: Always
+              securityContext:
+                capabilities: {}
+                privileged: false
+          restartPolicy: Always
+          dnsPolicy: ClusterFirst
+    status:
   - kind: Service
     apiVersion: v1
     metadata:
       name: ${SERVICE_NAME}-php
       creationTimestamp: null
-      annotations:
-        service.alpha.openshift.io/dependencies: '[{"name": "${SERVICE_NAME}-pg", "namespace": "", "kind": "Service"}]'
     spec:
       ports:
         - name: php-fpm
@@ -245,6 +367,10 @@ parameters:
     description: Nome do serviço OpenShift.
     value: 'dacs'
     required: true
+  - name: APPLICATION_DOMAIN
+    displayName: Hostname
+    description: Hostname da aplicação, deixe em branco para usar o padrão.
+    value: ''
   - name: GIT_URL
     displayName: Repositório git
     description: URL do repositório git.
