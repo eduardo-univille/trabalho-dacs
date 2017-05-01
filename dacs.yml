@@ -26,6 +26,132 @@ objects:
   - kind: Service
     apiVersion: v1
     metadata:
+      name: ${SERVICE_NAME}-php
+      creationTimestamp: null
+      annotations:
+        service.alpha.openshift.io/dependencies: '[{"name": "${SERVICE_NAME}-pg", "namespace": "", "kind": "Service"}]'
+    spec:
+      ports:
+        - name: php-fpm
+          protocol: TCP
+          port: 9000
+          targetPort: 9000
+          nodePort: 0
+      selector:
+        name: ${SERVICE_NAME}-php
+        deploymentconfig: ${SERVICE_NAME}-php
+      type: ClusterIP
+      sessionAffinity: None
+    status:
+      loadBalancer: {}
+  - kind: ImageStream
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-php
+  - kind: BuildConfig
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-php
+      creationTimestamp: null
+    spec:
+      nodeSelector: null
+      runPolicy: Serial
+      source:
+        type: Git
+        git:
+          uri: ${GIT_URL}
+          ref: ${GIT_REF}
+      strategy:
+        type: Docker
+        dockerStrategy:
+          from:
+            kind: DockerImage
+            name: php:fpm-alpine
+      output:
+        to:
+          kind: ImageStreamTag
+          name: ${SERVICE_NAME}-php:latest
+      triggers:
+        - type: ImageChange
+        - type: ConfigChange
+        - type: Generic
+          generic:
+            secret: ${WEBHOOK_SECRET}
+        - type: GitHub
+          github:
+            secret: ${WEBHOOK_SECRET}
+      postCommit: {}
+  - kind: DeploymentConfig
+    apiVersion: v1
+    metadata:
+      name: ${SERVICE_NAME}-php
+      creationTimestamp: null
+    spec:
+      strategy:
+        type: Rolling
+      triggers:
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - ${SERVICE_NAME}-php
+            from:
+              kind: ImageStreamTag
+              name: ${SERVICE_NAME}-php:latest
+        - type: ConfigChange
+      replicas: 1
+      selector:
+        name: ${SERVICE_NAME}-php
+        deploymentconfig: ${SERVICE_NAME}-php
+      template:
+        metadata:
+          creationTimestamp: null
+          labels:
+            name: ${SERVICE_NAME}-php
+            deploymentconfig: ${SERVICE_NAME}-php
+        spec:
+          containers:
+            - name: ${SERVICE_NAME}-php
+              image: ' '
+              ports:
+                - containerPort: 9000
+                  protocol: TCP
+              readinessProbe:
+                timeoutSeconds: 1
+                initialDelaySeconds: 5
+                tcpSocket:
+                  port: 9000
+              livenessProbe:
+                timeoutSeconds: 1
+                initialDelaySeconds: 5
+                tcpSocket:
+                  port: 9000
+              env:
+                - name: POSTGRESQL_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${SERVICE_NAME}-pg
+                      key: database-user
+                - name: POSTGRESQL_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: ${SERVICE_NAME}-pg
+                      key: database-password
+                - name: POSTGRESQL_DATABASE
+                  value: ${POSTGRESQL_DATABASE}
+                - name: POSTGRESQL_HOST
+                  value: ${SERVICE_NAME}-pg
+              terminationMessagePath: /dev/termination-log
+              imagePullPolicy: Always
+              securityContext:
+                capabilities: {}
+                privileged: false
+          restartPolicy: Always
+          dnsPolicy: ClusterFirst
+    status:
+  - kind: Service
+    apiVersion: v1
+    metadata:
       name: ${SERVICE_NAME}-pg
       creationTimestamp: null
     spec:
@@ -118,6 +244,22 @@ parameters:
     displayName: Nome do Serviço
     description: Nome do serviço OpenShift.
     value: 'dacs'
+    required: true
+  - name: GIT_URL
+    displayName: Repositório git
+    description: URL do repositório git.
+    value: 'https://github.com/eduardo-univille/trabalho-dacs.git'
+    required: true
+  - name: GIT_REF
+    displayName: Referência do git
+    description: Referência do repositório git para construir a aplicação.
+    value: 'master'
+    required: true
+  - name: WEBHOOK_SECRET
+    displayName: Senha do Webhook do GitHub
+    description: Uma senha usada para configurar o Webhook do GitHub.
+    generate: expression
+    from: '[a-zA-Z0-9]{40}'
     required: true
   - name: POSTGRESQL_USER
     displayName: Usuário do PostgreSQL
