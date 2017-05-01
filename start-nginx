@@ -1,0 +1,4 @@
+#!/bin/sh
+
+envsubst '$SERVICE_NAME' < nginx.tmpl > nginx.conf
+nginx -c "$(pwd)/nginx.conf"

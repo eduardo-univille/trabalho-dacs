@@ -1,0 +1,19 @@
+FROM nginx:alpine
+
+RUN mkdir /var/lib/nginx \
+ && chown nginx.nginx /var/lib/nginx \
+ && chmod 0777 /var/lib/nginx /var/cache/nginx
+
+WORKDIR  /var/lib/nginx
+
+USER nginx
+
+COPY start-nginx nginx.tmpl /var/lib/nginx/
+
+COPY src /var/lib/nginx/html
+
+EXPOSE 8080
+
+STOPSIGNAL SIGQUIT
+
+CMD ["./start-nginx"]
